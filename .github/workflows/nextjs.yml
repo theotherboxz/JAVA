@@ -1,65 +1,62 @@
-# Deploy the FULL app (Express server + Vite frontend) to Render.
-# Alternative to Railway — also free tier available.
-#
-# SETUP (one-time):
-#   1. Create a free account at https://render.com
-#   2. New → Web Service → Connect your GitHub repo
-#   3. Configure the service:
-#        Build Command:  npm ci && npm run build
-#        Start Command:  npm start
-#        Environment:    Node
-#        Node version:   22
-#   4. Under "Environment Variables" in Render dashboard, add:
-#        NODE_ENV = production
-#        BASE_PATH = /
-#   5. Under "Deploy Hooks" (in Render dashboard), copy the deploy hook URL
-#   6. In GitHub repo → Settings → Secrets → Actions → New secret:
-#        RENDER_DEPLOY_HOOK_URL  =  <your Render deploy hook URL>
-#   7. Push to main — this workflow triggers a Render redeploy automatically.
-#
-# NOTE: Render's free tier spins down after inactivity (cold start ~30s).
-#       Upgrade to a paid plan for always-on behaviour.
+# Deploy the Vite frontend to GitHub Pages (static site only).
+# Java code execution requires the Express server (npm run dev), not Pages.
 
-name: Deploy to Render
+name: Deploy to GitHub Pages
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
     steps:
-      # ── 1. Checkout ─────────────────────────────────────────────
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # ── 2. Node.js ──────────────────────────────────────────────
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
 
-      # ── 3. Validate build locally before triggering Render ───────
-      #   Catches broken builds before they reach production.
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Build app
-        run: npm run build
+      - name: Build static site
+        run: npx vite build
         env:
-          BASE_PATH: /
-          NODE_ENV: production
+          BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_GITHUB_PAGES: "true"
 
-      # ── 4. Trigger Render deploy hook ────────────────────────────
-      #   Render pulls from GitHub and builds using the commands
-      #   you configured in the dashboard (see SETUP above).
-      - name: Trigger Render deployment
-        run: |
-          curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            --silent --show-error
-        # -f makes curl exit non-zero on HTTP errors (4xx/5xx)
+      - name: SPA fallback for client-side routes
+        run: cp dist/index.html dist/404.html
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
