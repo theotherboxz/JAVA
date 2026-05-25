@@ -55,11 +55,27 @@ export default function App() {
       const classMatch = code.match(/public\s+class\s+(\w+)/);
       const className = classMatch ? classMatch[1] : "Main";
 
+      // Step 1: get a valid Java compiler name from Wandbox
+      const listRes = await fetch("https://wandbox.org/api/list.json");
+      if (!listRes.ok) {
+        setOutput("Error: Could not reach Wandbox. Check your connection.");
+        return;
+      }
+      const compilers = await listRes.json();
+      const javaCompiler = compilers.find(
+        (c: any) => c.language === "Java" || c.language === "java"
+      );
+      if (!javaCompiler) {
+        setOutput("Error: No Java compiler found on Wandbox.");
+        return;
+      }
+
+      // Step 2: compile and run
       const response = await fetch("https://wandbox.org/api/compile.json", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          compiler: "openjdk-head",
+          compiler: javaCompiler.name,
           code,
           save: false,
         }),
