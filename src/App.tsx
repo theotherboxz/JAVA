@@ -60,7 +60,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           compiler: "openjdk-head",
-          codes: [{ file: `${className}.java`, code }],
+          code,
           save: false,
         }),
       });
